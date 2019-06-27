@@ -6,22 +6,12 @@ import Html exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
+import Types.CardinalPoint exposing (CardinalPoint(..))
 
 
 apiHost : String
 apiHost =
     "https://api.noopschallenge.com"
-
-
-type CardinalPoint
-    = North
-    | East
-    | South
-    | West
-    | Northwest
-    | Northeast
-    | Southwest
-    | Southeast
 
 
 type MazeNode
@@ -143,8 +133,7 @@ subscriptions model =
 
 decodeKey : Decoder (Maybe CardinalPoint)
 decodeKey =
-    Decode.field "code" Decode.string
-        |> Decode.map toCardinalPoint
+    Decode.map toCardinalPoint <| Decode.field "code" Decode.string
 
 
 toCardinalPoint : String -> Maybe CardinalPoint
@@ -153,13 +142,25 @@ toCardinalPoint str =
         "ArrowUp" ->
             Just North
 
+        "KeyW" ->
+            Just North
+
         "ArrowLeft" ->
+            Just West
+
+        "KeyA" ->
             Just West
 
         "ArrowDown" ->
             Just South
 
+        "KeyS" ->
+            Just South
+
         "ArrowRight" ->
+            Just East
+
+        "KeyD" ->
             Just East
 
         _ ->
