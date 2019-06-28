@@ -6,7 +6,8 @@ import Html exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
-import Types.CardinalPoint exposing (CardinalPoint(..))
+import Json.Encode as Encode
+import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..), encodeCardinalPoint)
 
 
 apiHost : String
@@ -14,14 +15,53 @@ apiHost =
     "https://api.noopschallenge.com"
 
 
-type MazeNode
+type alias MazeNodeRecord =
+    { locationPath : String
+    , north : Maze
+    , east : Maze
+    , south : Maze
+    , west : Maze
+    }
+
+
+type Maze
     = Wall
-    | Room
-        { locationPath : String
-        , north : MazeNode
-        , east : MazeNode
-        , south : MazeNode
-        , west : MazeNode
+    | Undiscovered
+    | MazeNode MazeNodeRecord
+
+
+toMazeNodeHelper : List (Maybe CardinalPoint) -> MazeNodeRecord -> Maze
+toMazeNodeHelper directions acc =
+    case directions of
+        [] ->
+            MazeNode acc
+
+        x :: xs ->
+            case x of
+                Just North ->
+                    toMazeNodeHelper xs { acc | north = Undiscovered }
+
+                Just South ->
+                    toMazeNodeHelper xs { acc | south = Undiscovered }
+
+                Just East ->
+                    toMazeNodeHelper xs { acc | east = Undiscovered }
+
+                Just West ->
+                    toMazeNodeHelper xs { acc | west = Undiscovered }
+
+                _ ->
+                    toMazeNodeHelper xs acc
+
+
+toMazeNode : String -> List (Maybe CardinalPoint) -> Maze
+toMazeNode locationPath xs =
+    toMazeNodeHelper xs
+        { locationPath = locationPath
+        , north = Wall
+        , east = Wall
+        , south = Wall
+        , west = Wall
         }
 
 
@@ -64,7 +104,7 @@ decodePathbot =
 
 
 type alias Model =
-    { root : MazeNode
+    { root : Maze
     }
 
 
@@ -95,6 +135,38 @@ type Msg
     | NoOp
 
 
+postMove : String -> CardinalPoint -> Cmd Msg
+postMove path direction =
+    Http.post
+        { url = apiHost ++ path
+        , body =
+            Http.jsonBody <|
+                Encode.object
+                    [ ( "direction"
+                      , encodeCardinalPoint direction
+                      )
+                    ]
+        , expect = Http.expectJson GotPathbot decodePathbot
+        }
+
+
+updateModel : Pathbot -> Model -> Model
+updateModel pathbot model =
+    case pathbot.status of
+        "in-progress" ->
+            { root =
+                pathbot.exits
+                    |> List.map CardinalPoint.fromString
+                    |> toMazeNode pathbot.locationPath
+            }
+
+        "finished" ->
+            model
+
+        _ ->
+            model
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -104,19 +176,29 @@ update msg model =
                     Debug.log "response" result
             in
             case result of
-                Ok pathbot ->
+                Err err ->
                     ( model, Cmd.none )
 
-                Err _ ->
-                    ( model, Cmd.none )
+                Ok pathbot ->
+                    ( updateModel pathbot model, Cmd.none )
 
         MovePlayer probably ->
             case probably of
-                Just direction ->
-                    ( model, Cmd.none )
-
                 Nothing ->
-                    ( model, Cmd.none )
+                    update NoOp model
+
+                Just direction ->
+                    case model.root of
+                        Wall ->
+                            update NoOp model
+
+                        Undiscovered ->
+                            update NoOp model
+
+                        MazeNode rec ->
+                            ( model
+                            , postMove rec.locationPath direction
+                            )
 
         NoOp ->
             ( model, Cmd.none )
