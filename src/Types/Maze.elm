@@ -1,52 +1,53 @@
-module Types.Maze exposing (Maze(..), MazeNodeRecord, toMazeNode, toMazeNodeHelper)
+module Types.Maze exposing (Maze, createNode, insert)
 
+import Dict exposing (Dict)
 import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..))
 
-type alias MazeNodeRecord =
+
+type alias MazeNode =
     { locationPath : String
-    , north : Maze
-    , east : Maze
-    , south : Maze
-    , west : Maze
+    , north : Bool
+    , south : Bool
+    , east : Bool
+    , west : Bool
     }
 
 
-type Maze
-    = Wall
-    | Undiscovered
-    | MazeNode MazeNodeRecord
+type alias Maze =
+    Dict ( Int, Int ) MazeNode
 
 
-toMazeNodeHelper : List (Maybe CardinalPoint) -> MazeNodeRecord -> Maze
-toMazeNodeHelper directions acc =
-    case directions of
-        [] ->
-            MazeNode acc
+createNode : String -> List CardinalPoint -> MazeNode
+createNode locationPath directions =
+    let
+        addDirection direction node =
+            case direction of
+                North ->
+                    { node | north = True }
 
-        x :: xs ->
-            case x of
-                Just North ->
-                    toMazeNodeHelper xs { acc | north = Undiscovered }
+                South ->
+                    { node | south = True }
 
-                Just South ->
-                    toMazeNodeHelper xs { acc | south = Undiscovered }
+                East ->
+                    { node | east = True }
 
-                Just East ->
-                    toMazeNodeHelper xs { acc | east = Undiscovered }
-
-                Just West ->
-                    toMazeNodeHelper xs { acc | west = Undiscovered }
+                West ->
+                    { node | west = True }
 
                 _ ->
-                    toMazeNodeHelper xs acc
+                    node
+
+        emptyNode =
+            { locationPath = locationPath
+            , north = False
+            , south = False
+            , east = False
+            , west = False
+            }
+    in
+    List.foldl addDirection emptyNode directions
 
 
-toMazeNode : String -> List (Maybe CardinalPoint) -> Maze
-toMazeNode locationPath xs =
-    toMazeNodeHelper xs
-        { locationPath = locationPath
-        , north = Wall
-        , east = Wall
-        , south = Wall
-        , west = Wall
-        }
+insert : CardinalPoint -> ( Int, Int ) -> MazeNode -> Maze -> Maze
+insert direction =
+    Dict.insert << CardinalPoint.toRelativeCoordinate direction

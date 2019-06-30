@@ -2,13 +2,14 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events as Events
+import Dict exposing (Dict)
 import Html exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..), encodeCardinalPoint)
-import Types.Maze as Maze exposing (Maze(..))
+import Types.Maze as Maze exposing (Maze)
 
 
 apiHost : String
@@ -41,10 +42,10 @@ type alias Pathbot =
 decodePathbot : Decoder Pathbot
 decodePathbot =
     Decode.succeed Pathbot
-        |> optional "status" Decode.string ""
+        |> required "status" Decode.string
         |> optional "message" Decode.string ""
         |> optional "exits" (Decode.list Decode.string) []
-        |> optional "description" Decode.string ""
+        |> required "description" Decode.string
         |> optional "mazeExitDirection" Decode.string ""
         |> optional "mazeExitDistance" Decode.int -1
         |> optional "locationPath" Decode.string ""
@@ -55,13 +56,17 @@ decodePathbot =
 
 
 type alias Model =
-    { root : Maze
+    { maze : Maze
+    , moveDirection : CardinalPoint
+    , position : ( Int, Int )
     }
 
 
 initialModel : Model
 initialModel =
-    { root = Wall
+    { maze = Dict.empty
+    , moveDirection = East
+    , position = ( 0, 0 )
     }
 
 
@@ -105,10 +110,23 @@ updateModel : Pathbot -> Model -> Model
 updateModel pathbot model =
     case pathbot.status of
         "in-progress" ->
-            { root =
-                pathbot.exits
-                    |> List.map CardinalPoint.fromString
-                    |> Maze.toMazeNode pathbot.locationPath
+            { model
+                | maze =
+                    let
+                        newNode =
+                            pathbot.exits
+                                |> List.filterMap CardinalPoint.fromString
+                                |> Maze.createNode pathbot.locationPath
+                    in
+                    Maze.insert
+                        model.moveDirection
+                        model.position
+                        newNode
+                        model.maze
+                , position =
+                    CardinalPoint.toRelativeCoordinate
+                        model.moveDirection
+                        model.position
             }
 
         "finished" ->
@@ -134,22 +152,19 @@ update msg model =
                     ( updateModel pathbot model, Cmd.none )
 
         MovePlayer probably ->
-            case probably of
-                Nothing ->
-                    update NoOp model
-
-                Just direction ->
-                    case model.root of
-                        Wall ->
-                            update NoOp model
-
-                        Undiscovered ->
-                            update NoOp model
-
-                        MazeNode rec ->
-                            ( model
-                            , postMove rec.locationPath direction
-                            )
+            let
+                node =
+                    Dict.get model.position model.maze
+            in
+            Maybe.map2
+                (\direction mazeNode ->
+                    ( { model | moveDirection = direction }
+                    , postMove mazeNode.locationPath direction
+                    )
+                )
+                probably
+                node
+                |> Maybe.withDefault (update NoOp model)
 
         NoOp ->
             ( model, Cmd.none )
