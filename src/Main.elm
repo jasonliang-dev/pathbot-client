@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser
 import Browser.Dom as Dom
 import Browser.Events as Events
+import Canvas
 import Dict exposing (Dict)
 import Html exposing (..)
 import Http
@@ -106,6 +107,43 @@ type Msg
     | NoOp
 
 
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        GotPathbot result ->
+            let
+                _ =
+                    Debug.log "response" result
+            in
+            case result of
+                Err err ->
+                    update NoOp model
+
+                Ok pathbot ->
+                    ( updateModel pathbot model, Cmd.none )
+
+        MovePlayer movement ->
+            let
+                currentNode =
+                    Dict.get model.position model.maze
+            in
+            Maybe.map2
+                (\direction mazeNode ->
+                    ( { model | moveDirection = direction }
+                    , postMove mazeNode.locationPath direction
+                    )
+                )
+                movement
+                currentNode
+                |> Maybe.withDefault (update NoOp model)
+
+        Resize ( width, height ) ->
+            ( { model | width = width, height = height }, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
+
+
 postMove : String -> CardinalPoint -> Cmd Msg
 postMove path direction =
     Http.post
@@ -146,43 +184,6 @@ updateModel pathbot model =
 
         _ ->
             model
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        GotPathbot result ->
-            let
-                _ =
-                    Debug.log "response" result
-            in
-            case result of
-                Err err ->
-                    ( model, Cmd.none )
-
-                Ok pathbot ->
-                    ( updateModel pathbot model, Cmd.none )
-
-        MovePlayer probably ->
-            let
-                currentNode =
-                    Dict.get model.position model.maze
-            in
-            Maybe.map2
-                (\direction mazeNode ->
-                    ( { model | moveDirection = direction }
-                    , postMove mazeNode.locationPath direction
-                    )
-                )
-                probably
-                currentNode
-                |> Maybe.withDefault (update NoOp model)
-
-        Resize ( width, height ) ->
-            ( { model | width = width, height = height }, Cmd.none )
-
-        NoOp ->
-            ( model, Cmd.none )
 
 
 
@@ -240,7 +241,10 @@ toCardinalPoint str =
 view : Model -> Html Msg
 view model =
     div []
-        []
+        [ Canvas.toHtml ( model.width, model.height )
+            []
+            []
+        ]
 
 
 

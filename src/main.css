@@ -8,3 +8,8 @@
 [data-elm-hot="true"] {
   height: inherit;
 }
+
+body {
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
