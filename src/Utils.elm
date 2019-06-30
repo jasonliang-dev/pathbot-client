@@ -1,4 +1,4 @@
-module Utils exposing (flip, getFirst, getSecond)
+module Utils exposing (curry, flip, getFirst, getSecond, uncurry)
 
 
 getFirst : b -> List ( a, b ) -> Maybe a
@@ -18,3 +18,13 @@ getSecond a =
 flip : (a -> b -> c) -> b -> a -> c
 flip fn a b =
     fn b a
+
+
+curry : (( a, b ) -> c) -> a -> b -> c
+curry fn a b =
+    fn ( a, b )
+
+
+uncurry : (a -> b -> c) -> ( a, b ) -> c
+uncurry fn ( a, b ) =
+    fn a b

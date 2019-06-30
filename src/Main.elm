@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Dom as Dom
 import Browser.Events as Events
 import Dict exposing (Dict)
 import Html exposing (..)
@@ -8,8 +9,10 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
+import Task
 import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..), encodeCardinalPoint)
 import Types.Maze as Maze exposing (Maze)
+import Utils
 
 
 apiHost : String
@@ -59,6 +62,8 @@ type alias Model =
     { maze : Maze
     , moveDirection : CardinalPoint
     , position : ( Int, Int )
+    , width : Int
+    , height : Int
     }
 
 
@@ -66,18 +71,27 @@ initialModel : Model
 initialModel =
     { maze = Dict.empty
     , moveDirection = East
-    , position = ( 0, 0 )
+    , position = ( -1, 0 )
+    , width = 1
+    , height = 1
     }
 
 
 init : ( Model, Cmd Msg )
 init =
+    let
+        windowSize { viewport } =
+            ( round viewport.width, round viewport.height )
+    in
     ( initialModel
-    , Http.post
-        { url = apiHost ++ "/pathbot/start"
-        , body = Http.emptyBody
-        , expect = Http.expectJson GotPathbot decodePathbot
-        }
+    , Cmd.batch
+        [ Http.post
+            { url = apiHost ++ "/pathbot/start"
+            , body = Http.emptyBody
+            , expect = Http.expectJson GotPathbot decodePathbot
+            }
+        , Task.perform (Resize << windowSize) Dom.getViewport
+        ]
     )
 
 
@@ -88,6 +102,7 @@ init =
 type Msg
     = GotPathbot (Result Http.Error Pathbot)
     | MovePlayer (Maybe CardinalPoint)
+    | Resize ( Int, Int )
     | NoOp
 
 
@@ -98,10 +113,7 @@ postMove path direction =
         , body =
             Http.jsonBody <|
                 Encode.object
-                    [ ( "direction"
-                      , encodeCardinalPoint direction
-                      )
-                    ]
+                    [ ( "direction", encodeCardinalPoint direction ) ]
         , expect = Http.expectJson GotPathbot decodePathbot
         }
 
@@ -153,7 +165,7 @@ update msg model =
 
         MovePlayer probably ->
             let
-                node =
+                currentNode =
                     Dict.get model.position model.maze
             in
             Maybe.map2
@@ -163,8 +175,11 @@ update msg model =
                     )
                 )
                 probably
-                node
+                currentNode
                 |> Maybe.withDefault (update NoOp model)
+
+        Resize ( width, height ) ->
+            ( { model | width = width, height = height }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -176,7 +191,10 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Events.onKeyDown <| Decode.map MovePlayer decodeKey
+    Sub.batch
+        [ Events.onKeyDown <| Decode.map MovePlayer decodeKey
+        , Events.onResize (Utils.curry Resize)
+        ]
 
 
 decodeKey : Decoder (Maybe CardinalPoint)
@@ -222,8 +240,7 @@ toCardinalPoint str =
 view : Model -> Html Msg
 view model =
     div []
-        [ h1 [] [ text "Your Elm App is working!" ]
-        ]
+        []
 
 
 
