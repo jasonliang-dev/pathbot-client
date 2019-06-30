@@ -43,7 +43,7 @@ fromString str =
 toString : CardinalPoint -> String
 toString direction =
     Utils.getFirst direction cardinalPoints
-        |> Maybe.withDefault "N"
+        |> Maybe.withDefault ""
 
 
 toCoordinate : CardinalPoint -> ( Int, Int )

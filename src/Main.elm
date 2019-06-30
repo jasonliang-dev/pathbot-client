@@ -3,7 +3,8 @@ module Main exposing (main)
 import Browser
 import Browser.Dom as Dom
 import Browser.Events as Events
-import Canvas
+import Canvas exposing (Renderable)
+import Color
 import Dict exposing (Dict)
 import Html exposing (..)
 import Http
@@ -11,7 +12,11 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Task
-import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..), encodeCardinalPoint)
+import Types.CardinalPoint as CardinalPoint
+    exposing
+        ( CardinalPoint(..)
+        , encodeCardinalPoint
+        )
 import Types.Maze as Maze exposing (Maze)
 import Utils
 
@@ -91,7 +96,7 @@ init =
             , body = Http.emptyBody
             , expect = Http.expectJson GotPathbot decodePathbot
             }
-        , Task.perform (Resize << windowSize) Dom.getViewport
+        , Task.perform (ResizeWindow << windowSize) Dom.getViewport
         ]
     )
 
@@ -103,7 +108,7 @@ init =
 type Msg
     = GotPathbot (Result Http.Error Pathbot)
     | MovePlayer (Maybe CardinalPoint)
-    | Resize ( Int, Int )
+    | ResizeWindow ( Int, Int )
     | NoOp
 
 
@@ -120,7 +125,7 @@ update msg model =
                     update NoOp model
 
                 Ok pathbot ->
-                    ( updateModel pathbot model, Cmd.none )
+                    ( updateMaze pathbot model, Cmd.none )
 
         MovePlayer movement ->
             let
@@ -137,7 +142,7 @@ update msg model =
                 currentNode
                 |> Maybe.withDefault (update NoOp model)
 
-        Resize ( width, height ) ->
+        ResizeWindow ( width, height ) ->
             ( { model | width = width, height = height }, Cmd.none )
 
         NoOp ->
@@ -156,34 +161,36 @@ postMove path direction =
         }
 
 
-updateModel : Pathbot -> Model -> Model
-updateModel pathbot model =
+updateMaze : Pathbot -> Model -> Model
+updateMaze pathbot model =
     case pathbot.status of
         "in-progress" ->
-            { model
-                | maze =
-                    let
-                        newNode =
-                            pathbot.exits
-                                |> List.filterMap CardinalPoint.fromString
-                                |> Maze.createNode pathbot.locationPath
-                    in
-                    Maze.insert
-                        model.moveDirection
-                        model.position
-                        newNode
-                        model.maze
-                , position =
-                    CardinalPoint.toRelativeCoordinate
-                        model.moveDirection
-                        model.position
-            }
+            updateMazeInProgress pathbot model
 
         "finished" ->
             model
 
         _ ->
             model
+
+
+updateMazeInProgress : Pathbot -> Model -> Model
+updateMazeInProgress pathbot model =
+    { model
+        | position =
+            CardinalPoint.toRelativeCoordinate
+                model.moveDirection
+                model.position
+        , maze =
+            Maze.insert
+                model.moveDirection
+                model.position
+                (pathbot.exits
+                    |> List.filterMap CardinalPoint.fromString
+                    |> Maze.createNode pathbot.locationPath
+                )
+                model.maze
+    }
 
 
 
@@ -194,7 +201,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onKeyDown <| Decode.map MovePlayer decodeKey
-        , Events.onResize (Utils.curry Resize)
+        , Events.onResize (Utils.curry ResizeWindow)
         ]
 
 
@@ -240,11 +247,37 @@ toCardinalPoint str =
 
 view : Model -> Html Msg
 view model =
+    let
+        nodeRadius =
+            16
+
+        position pos sizeFn =
+            nodeRadius * 4 * toFloat pos + toFloat (sizeFn model) / 2
+
+        pointToCircle ( x, y ) =
+            Canvas.circle
+                ( position x .width, position y .height )
+                nodeRadius
+    in
     div []
         [ Canvas.toHtml ( model.width, model.height )
             []
-            []
+            [ clearCanvas ( toFloat model.width, toFloat model.height )
+            , Canvas.shapes
+                [ Canvas.fill Color.black ]
+                (List.map pointToCircle <| Dict.keys model.maze)
+            , Canvas.shapes
+                []
+                []
+            ]
         ]
+
+
+clearCanvas : ( Float, Float ) -> Renderable
+clearCanvas ( width, height ) =
+    Canvas.shapes
+        [ Canvas.fill Color.white ]
+        [ Canvas.rect ( 0, 0 ) width height ]
 
 
 
