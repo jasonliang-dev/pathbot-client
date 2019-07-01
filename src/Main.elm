@@ -134,9 +134,6 @@ update msg model =
     case msg of
         GotPathbot result ->
             let
-                _ =
-                    Debug.log "pathbot" (Debug.toString result)
-
                 updatedModel =
                     { model | moving = False }
             in
@@ -396,8 +393,11 @@ pointOnCanvas ( cameraX, cameraY ) ( x, y ) =
 drawMazeNode : ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
 drawMazeNode ( cameraX, cameraY ) ( x, y ) node =
     let
+        alpha =
+            max (2 - Utils.pointMagnitude ( toFloat x, toFloat y ) * 0.5) 0
+
         black =
-            Color.rgb255 36 41 46
+            Color.rgba 0.14 0.16 0.18 alpha
 
         getCanvasPoint =
             pointOnCanvas ( cameraX, cameraY )
@@ -429,21 +429,25 @@ drawMazeNode ( cameraX, cameraY ) ( x, y ) node =
                 (getCanvasPoint <| nextPoint direction)
                 (radius - 1)
     in
-    [ Canvas.shapes
-        [ Canvas.fill black ]
-        [ Canvas.circle (getCanvasPoint ( x, y )) (radius - 1) ]
-    , Canvas.shapes
-        [ Canvas.stroke black
-        , Canvas.lineWidth 2
-        ]
-        (List.foldl
-            (\dir acc ->
-                drawLineFromCardinal dir :: drawUnvisted dir :: acc
+    if alpha == 0 then
+        []
+
+    else
+        [ Canvas.shapes
+            [ Canvas.fill black ]
+            [ Canvas.circle (getCanvasPoint ( x, y )) (radius - 1) ]
+        , Canvas.shapes
+            [ Canvas.stroke black
+            , Canvas.lineWidth 2
+            ]
+            (List.foldl
+                (\dir acc ->
+                    drawLineFromCardinal dir :: drawUnvisted dir :: acc
+                )
+                []
+                (Maze.toCardinalPoints node)
             )
-            []
-            (Maze.toCardinalPoints node)
-        )
-    ]
+        ]
 
 
 

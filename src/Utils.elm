@@ -4,6 +4,7 @@ module Utils exposing
     , getFirst
     , getSecond
     , map2Both
+    , pointMagnitude
     , pointMap
     , pointMap2Both
     , uncurry
@@ -54,6 +55,6 @@ pointMap2Both fn =
     map2Both fn fn
 
 
-deltaPoint : ( number, number ) -> ( number, number ) -> ( number, number )
-deltaPoint ( a, b ) ( x, y ) =
-    ( x - a, y - b )
+pointMagnitude : ( Float, Float ) -> Float
+pointMagnitude ( x, y ) =
+    sqrt (x * x + y * y)
