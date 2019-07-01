@@ -5,8 +5,8 @@ import Browser.Dom as Dom
 import Browser.Events as Events
 import Canvas exposing (Renderable)
 import Color
-import Dict exposing (Dict)
-import Html exposing (..)
+import Dict
+import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (optional, required)
@@ -138,7 +138,7 @@ update msg model =
                     { model | moving = False }
             in
             case result of
-                Err err ->
+                Err _ ->
                     ( updatedModel, Cmd.none )
 
                 Ok pathbot ->
@@ -157,8 +157,7 @@ update msg model =
                                 model.position
 
                         ( cameraX, cameraY ) =
-                            updateCamera direction
-                                ( model.cameraX, model.cameraY )
+                            jumpCamera direction
 
                         nextPathExists =
                             Maze.toCardinalPoints mazeNode
@@ -255,8 +254,7 @@ updateMazeInProgress : Pathbot -> Model -> Model
 updateMazeInProgress pathbot model =
     let
         ( cameraX, cameraY ) =
-            updateCamera model.moveDirection
-                ( model.cameraX, model.cameraY )
+            jumpCamera model.moveDirection
     in
     { model
         | position =
@@ -277,8 +275,8 @@ updateMazeInProgress pathbot model =
     }
 
 
-updateCamera : CardinalPoint -> ( Float, Float ) -> ( Float, Float )
-updateCamera direction model =
+jumpCamera : CardinalPoint -> ( Float, Float )
+jumpCamera direction =
     let
         ( x, y ) =
             CardinalPoint.toCoordinate direction
@@ -293,7 +291,7 @@ updateCamera direction model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.batch
         [ Events.onKeyDown <| Decode.map MovePlayer decodeKey
         , Events.onResize ResizeWindow
@@ -343,7 +341,8 @@ toCardinalPoint str =
 
 view : Model -> Html Msg
 view model =
-    div [] [ Canvas.toHtml ( model.width, model.height ) [] (renders model) ]
+    Html.div []
+        [ Canvas.toHtml ( model.width, model.height ) [] (renders model) ]
 
 
 clearCanvas : ( Float, Float ) -> Renderable
@@ -366,7 +365,10 @@ renders model =
             ( model.cameraX, model.cameraY )
 
         drawNode ( x, y ) node =
-            drawMazeNode cameraPos ( x - offsetX, y - offsetY ) node
+            drawMazeNode ( toFloat model.width, toFloat model.height )
+                cameraPos
+                ( x - offsetX, y - offsetY )
+                node
     in
     List.concat
         [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
@@ -390,11 +392,21 @@ pointOnCanvas ( cameraX, cameraY ) ( x, y ) =
     )
 
 
-drawMazeNode : ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
-drawMazeNode ( cameraX, cameraY ) ( x, y ) node =
+drawMazeNode :
+    ( Float, Float )
+    -> ( Float, Float )
+    -> ( Int, Int )
+    -> MazeNode
+    -> List Renderable
+drawMazeNode ( width, height ) ( cameraX, cameraY ) ( x, y ) node =
     let
+        delta =
+            Utils.pointMap2Both (-)
+                ( width / 2, height / 2 )
+                (getCanvasPoint ( x, y ))
+
         alpha =
-            max (2 - Utils.pointMagnitude ( toFloat x, toFloat y ) * 0.5) 0
+            max 0 (2 - Utils.pointMagnitude delta * 0.008)
 
         black =
             Color.rgba 0.14 0.16 0.18 alpha
