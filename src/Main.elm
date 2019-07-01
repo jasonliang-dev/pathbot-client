@@ -136,19 +136,33 @@ update msg model =
             let
                 currentNode =
                     Dict.get model.position model.maze
+
+                doMove direction mazeNode =
+                    let
+                        nextPosition =
+                            CardinalPoint.toRelativeCoordinate direction model.position
+
+                        nextNodeExists =
+                            Dict.member nextPosition model.maze
+                    in
+                    if nextNodeExists then
+                        ( { model
+                            | moveDirection = direction
+                            , position = nextPosition
+                          }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( { model | moveDirection = direction, moving = True }
+                        , postMove mazeNode.locationPath direction
+                        )
             in
             if model.moving then
                 update NoOp model
 
             else
-                Maybe.map2
-                    (\direction mazeNode ->
-                        ( { model | moveDirection = direction, moving = True }
-                        , postMove mazeNode.locationPath direction
-                        )
-                    )
-                    movement
-                    currentNode
+                Maybe.map2 doMove movement currentNode
                     |> Maybe.withDefault (update NoOp model)
 
         ResizeWindow width height ->
@@ -332,6 +346,11 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
                         (trimLine ( xx, yy ))
                     )
                 ]
+
+        drawLineFromCardinal direction =
+            ( x, y )
+                |> CardinalPoint.toRelativeCoordinate direction
+                |> drawLine
     in
     [ Canvas.shapes
         [ Canvas.fill fillColor
@@ -348,8 +367,7 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
         ]
         (node
             |> Maze.toCardinalPoints
-            |> List.map (Utils.flip CardinalPoint.toRelativeCoordinate ( x, y ))
-            |> List.map drawLine
+            |> List.map drawLineFromCardinal
         )
     ]
 
