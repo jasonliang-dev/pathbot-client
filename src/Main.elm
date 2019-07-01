@@ -212,8 +212,8 @@ update msg model =
                     model.cameraY
             in
             ( { model
-                | cameraX = camX + (midX - camX) * 0.08
-                , cameraY = camY + (midY - camY) * 0.08
+                | cameraX = camX + (midX - camX) * deltaTime * 0.005
+                , cameraY = camY + (midY - camY) * deltaTime * 0.005
               }
             , Cmd.none
             )
