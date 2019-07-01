@@ -1,4 +1,4 @@
-module Utils exposing (curry, flip, getFirst, getSecond, uncurry)
+module Utils exposing (curry, flip, getFirst, getSecond, pointMap, uncurry)
 
 
 getFirst : b -> List ( a, b ) -> Maybe a
@@ -28,3 +28,8 @@ curry fn a b =
 uncurry : (a -> b -> c) -> ( a, b ) -> c
 uncurry fn ( a, b ) =
     fn a b
+
+
+pointMap : (a -> b) -> ( a, a ) -> ( b, b )
+pointMap fn =
+    Tuple.mapBoth fn fn

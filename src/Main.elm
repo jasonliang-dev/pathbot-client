@@ -17,7 +17,7 @@ import Types.CardinalPoint as CardinalPoint
         ( CardinalPoint(..)
         , encodeCardinalPoint
         )
-import Types.Maze as Maze exposing (Maze)
+import Types.Maze as Maze exposing (Maze, MazeNode)
 import Utils
 
 
@@ -67,6 +67,7 @@ decodePathbot =
 type alias Model =
     { maze : Maze
     , moveDirection : CardinalPoint
+    , moving : Bool
     , position : ( Int, Int )
     , width : Int
     , height : Int
@@ -77,6 +78,7 @@ initialModel : Model
 initialModel =
     { maze = Dict.empty
     , moveDirection = East
+    , moving = True
     , position = ( -1, 0 )
     , width = 1
     , height = 1
@@ -96,7 +98,7 @@ init =
             , body = Http.emptyBody
             , expect = Http.expectJson GotPathbot decodePathbot
             }
-        , Task.perform (ResizeWindow << windowSize) Dom.getViewport
+        , Task.perform (Utils.uncurry ResizeWindow << windowSize) Dom.getViewport
         ]
     )
 
@@ -108,7 +110,7 @@ init =
 type Msg
     = GotPathbot (Result Http.Error Pathbot)
     | MovePlayer (Maybe CardinalPoint)
-    | ResizeWindow ( Int, Int )
+    | ResizeWindow Int Int
     | NoOp
 
 
@@ -117,32 +119,36 @@ update msg model =
     case msg of
         GotPathbot result ->
             let
-                _ =
-                    Debug.log "response" result
+                updatedModel =
+                    { model | moving = False }
             in
             case result of
                 Err err ->
-                    update NoOp model
+                    ( updatedModel, Cmd.none )
 
                 Ok pathbot ->
-                    ( updateMaze pathbot model, Cmd.none )
+                    ( updateMaze pathbot updatedModel, Cmd.none )
 
         MovePlayer movement ->
             let
                 currentNode =
                     Dict.get model.position model.maze
             in
-            Maybe.map2
-                (\direction mazeNode ->
-                    ( { model | moveDirection = direction }
-                    , postMove mazeNode.locationPath direction
-                    )
-                )
-                movement
-                currentNode
-                |> Maybe.withDefault (update NoOp model)
+            if model.moving then
+                update NoOp model
 
-        ResizeWindow ( width, height ) ->
+            else
+                Maybe.map2
+                    (\direction mazeNode ->
+                        ( { model | moveDirection = direction, moving = True }
+                        , postMove mazeNode.locationPath direction
+                        )
+                    )
+                    movement
+                    currentNode
+                    |> Maybe.withDefault (update NoOp model)
+
+        ResizeWindow width height ->
             ( { model | width = width, height = height }, Cmd.none )
 
         NoOp ->
@@ -154,9 +160,9 @@ postMove path direction =
     Http.post
         { url = apiHost ++ path
         , body =
-            Http.jsonBody <|
-                Encode.object
-                    [ ( "direction", encodeCardinalPoint direction ) ]
+            [ ( "direction", encodeCardinalPoint direction ) ]
+                |> Encode.object
+                |> Http.jsonBody
         , expect = Http.expectJson GotPathbot decodePathbot
         }
 
@@ -201,7 +207,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onKeyDown <| Decode.map MovePlayer decodeKey
-        , Events.onResize (Utils.curry ResizeWindow)
+        , Events.onResize ResizeWindow
         ]
 
 
@@ -247,29 +253,11 @@ toCardinalPoint str =
 
 view : Model -> Html Msg
 view model =
-    let
-        nodeRadius =
-            16
-
-        position pos sizeFn =
-            nodeRadius * 4 * toFloat pos + toFloat (sizeFn model) / 2
-
-        pointToCircle ( x, y ) =
-            Canvas.circle
-                ( position x .width, position y .height )
-                nodeRadius
-    in
     div []
-        [ Canvas.toHtml ( model.width, model.height )
+        [ Canvas.toHtml
+            ( model.width, model.height )
             []
-            [ clearCanvas ( toFloat model.width, toFloat model.height )
-            , Canvas.shapes
-                [ Canvas.fill Color.black ]
-                (List.map pointToCircle <| Dict.keys model.maze)
-            , Canvas.shapes
-                []
-                []
-            ]
+            (renders model)
         ]
 
 
@@ -278,6 +266,75 @@ clearCanvas ( width, height ) =
     Canvas.shapes
         [ Canvas.fill Color.white ]
         [ Canvas.rect ( 0, 0 ) width height ]
+
+
+renders : Model -> List Renderable
+renders model =
+    let
+        dimensions =
+            ( toFloat model.width, toFloat model.height )
+
+        ( offsetX, offsetY ) =
+            model.position
+
+        drawNode ( x, y ) node =
+            drawMazeNode 15 dimensions ( x - offsetX, y - offsetY ) node
+    in
+    List.concat
+        [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
+        , Dict.toList model.maze
+            |> List.map (Utils.uncurry drawNode)
+            |> List.concat
+        ]
+
+
+pointOnCanvas : Float -> ( Float, Float ) -> ( Int, Int ) -> ( Float, Float )
+pointOnCanvas radius ( width, height ) ( x, y ) =
+    ( radius * 4 * toFloat x + width / 2
+    , radius * 4 * toFloat y + height / 2
+    )
+
+
+drawMazeNode : Float -> ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
+drawMazeNode radius ( width, height ) ( x, y ) node =
+    let
+        red =
+            Color.rgb255 236 67 66
+
+        black =
+            Color.rgb255 36 41 46
+
+        fillColor =
+            if ( x, y ) == ( 0, 0 ) then
+                red
+
+            else
+                black
+
+        getCanvasPoint =
+            pointOnCanvas radius ( width, height )
+    in
+    [ Canvas.shapes
+        [ Canvas.stroke black
+        , Canvas.lineWidth 2
+        ]
+        (node
+            |> Maze.toCardinalPoints
+            |> List.map (Utils.flip CardinalPoint.toRelativeCoordinate ( x, y ))
+            |> List.map
+                (\( xx, yy ) ->
+                    Canvas.path
+                        (getCanvasPoint ( xx, yy ))
+                        [ Canvas.lineTo (getCanvasPoint ( x, y )) ]
+                )
+        )
+    , Canvas.shapes
+        [ Canvas.fill fillColor ]
+        [ Canvas.circle
+            (getCanvasPoint ( x, y ))
+            radius
+        ]
+    ]
 
 
 

@@ -1,4 +1,4 @@
-module Types.Maze exposing (Maze, createNode, insert)
+module Types.Maze exposing (Maze, MazeNode, createNode, insert, toCardinalPoints)
 
 import Dict exposing (Dict)
 import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..))
@@ -46,6 +46,24 @@ createNode locationPath directions =
             }
     in
     List.foldl addDirection emptyNode directions
+
+
+toCardinalPoints : MazeNode -> List CardinalPoint
+toCardinalPoints node =
+    let
+        get direction prop =
+            if prop then
+                Just direction
+
+            else
+                Nothing
+    in
+    List.filterMap identity
+        [ get North node.north
+        , get South node.south
+        , get East node.east
+        , get West node.west
+        ]
 
 
 insert : CardinalPoint -> ( Int, Int ) -> MazeNode -> Maze -> Maze
