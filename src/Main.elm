@@ -163,10 +163,17 @@ update msg model =
                             updateCamera direction
                                 ( model.cameraX, model.cameraY )
 
+                        nextPathExists =
+                            Maze.toCardinalPoints mazeNode
+                                |> List.member direction
+
                         nextNodeExists =
                             Dict.member nextPosition model.maze
                     in
-                    if nextNodeExists then
+                    if not nextPathExists then
+                        ( model, Cmd.none )
+
+                    else if nextNodeExists then
                         ( { model
                             | position = nextPosition
                             , cameraX = model.cameraX + cameraX
