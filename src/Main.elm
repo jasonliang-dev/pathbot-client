@@ -140,18 +140,15 @@ update msg model =
                 doMove direction mazeNode =
                     let
                         nextPosition =
-                            CardinalPoint.toRelativeCoordinate direction model.position
+                            CardinalPoint.toRelativeCoordinate
+                                direction
+                                model.position
 
                         nextNodeExists =
                             Dict.member nextPosition model.maze
                     in
                     if nextNodeExists then
-                        ( { model
-                            | moveDirection = direction
-                            , position = nextPosition
-                          }
-                        , Cmd.none
-                        )
+                        ( { model | position = nextPosition }, Cmd.none )
 
                     else
                         ( { model | moveDirection = direction, moving = True }
@@ -288,6 +285,9 @@ clearCanvas ( width, height ) =
 renders : Model -> List Renderable
 renders model =
     let
+        zoom =
+            12
+
         dimensions =
             ( toFloat model.width, toFloat model.height )
 
@@ -295,7 +295,7 @@ renders model =
             model.position
 
         drawNode ( x, y ) node =
-            drawMazeNode 15 dimensions ( x - offsetX, y - offsetY ) node
+            drawMazeNode zoom dimensions ( x - offsetX, y - offsetY ) node
     in
     List.concat
         [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
@@ -347,27 +347,37 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
                     )
                 ]
 
-        drawLineFromCardinal direction =
+        nextPoint direction =
             ( x, y )
                 |> CardinalPoint.toRelativeCoordinate direction
-                |> drawLine
+
+        drawLineFromCardinal =
+            drawLine << nextPoint
+
+        drawUnvisted direction =
+            Canvas.circle
+                (getCanvasPoint <| nextPoint direction)
+                (radius - 2)
     in
     [ Canvas.shapes
         [ Canvas.fill fillColor
         , Canvas.stroke black
-        , Canvas.lineWidth 4
+        , Canvas.lineWidth 2
         ]
         [ Canvas.circle
             (getCanvasPoint ( x, y ))
-            (radius - 2)
+            radius
         ]
     , Canvas.shapes
         [ Canvas.stroke black
         , Canvas.lineWidth 2
         ]
-        (node
-            |> Maze.toCardinalPoints
-            |> List.map drawLineFromCardinal
+        (List.foldl
+            (\dir acc ->
+                drawLineFromCardinal dir :: drawUnvisted dir :: acc
+            )
+            []
+            (Maze.toCardinalPoints node)
         )
     ]
 
