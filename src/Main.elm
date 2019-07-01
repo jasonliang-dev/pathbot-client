@@ -268,8 +268,7 @@ toCardinalPoint str =
 view : Model -> Html Msg
 view model =
     div []
-        [ Canvas.toHtml
-            ( model.width, model.height )
+        [ Canvas.toHtml ( model.width, model.height )
             []
             (renders model)
         ]
@@ -285,8 +284,11 @@ clearCanvas ( width, height ) =
 renders : Model -> List Renderable
 renders model =
     let
-        zoom =
-            12
+        radius =
+            15
+
+        red =
+            Color.rgb255 236 67 66
 
         dimensions =
             ( toFloat model.width, toFloat model.height )
@@ -295,13 +297,20 @@ renders model =
             model.position
 
         drawNode ( x, y ) node =
-            drawMazeNode zoom dimensions ( x - offsetX, y - offsetY ) node
+            drawMazeNode radius dimensions ( x - offsetX, y - offsetY ) node
     in
     List.concat
         [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
         , Dict.toList model.maze
             |> List.map (Utils.uncurry drawNode)
             |> List.concat
+        , [ Canvas.shapes
+                [ Canvas.fill red ]
+                [ Canvas.circle
+                    (pointOnCanvas radius dimensions ( 0, 0 ))
+                    (radius - 2)
+                ]
+          ]
         ]
 
 
@@ -315,18 +324,8 @@ pointOnCanvas radius ( width, height ) ( x, y ) =
 drawMazeNode : Float -> ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
 drawMazeNode radius ( width, height ) ( x, y ) node =
     let
-        red =
-            Color.rgb255 236 67 66
-
         black =
             Color.rgb255 36 41 46
-
-        fillColor =
-            if ( x, y ) == ( 0, 0 ) then
-                red
-
-            else
-                black
 
         getCanvasPoint =
             pointOnCanvas radius ( width, height )
@@ -348,8 +347,7 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
                 ]
 
         nextPoint direction =
-            ( x, y )
-                |> CardinalPoint.toRelativeCoordinate direction
+            CardinalPoint.toRelativeCoordinate direction ( x, y )
 
         drawLineFromCardinal =
             drawLine << nextPoint
@@ -357,17 +355,11 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
         drawUnvisted direction =
             Canvas.circle
                 (getCanvasPoint <| nextPoint direction)
-                (radius - 2)
+                (radius - 1)
     in
     [ Canvas.shapes
-        [ Canvas.fill fillColor
-        , Canvas.stroke black
-        , Canvas.lineWidth 2
-        ]
-        [ Canvas.circle
-            (getCanvasPoint ( x, y ))
-            radius
-        ]
+        [ Canvas.fill black ]
+        [ Canvas.circle (getCanvasPoint ( x, y )) (radius - 1) ]
     , Canvas.shapes
         [ Canvas.stroke black
         , Canvas.lineWidth 2
