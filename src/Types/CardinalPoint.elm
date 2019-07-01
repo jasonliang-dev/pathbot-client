@@ -1,5 +1,6 @@
 module Types.CardinalPoint exposing
     ( CardinalPoint(..)
+    , complement
     , encodeCardinalPoint
     , fromString
     , toCoordinate
@@ -78,6 +79,34 @@ toRelativeCoordinate : CardinalPoint -> ( Int, Int ) -> ( Int, Int )
 toRelativeCoordinate direction ( x, y ) =
     toCoordinate direction
         |> Tuple.mapBoth ((+) x) ((+) y)
+
+
+complement : CardinalPoint -> CardinalPoint
+complement direction =
+    case direction of
+        North ->
+            South
+
+        South ->
+            North
+
+        East ->
+            West
+
+        West ->
+            East
+
+        Northeast ->
+            Southwest
+
+        Northwest ->
+            Southeast
+
+        Southeast ->
+            Northwest
+
+        Southwest ->
+            Northeast
 
 
 encodeCardinalPoint : CardinalPoint -> Value

@@ -52,3 +52,8 @@ map2Both fnFirst fnSecond ( a, b ) ( c, d ) =
 pointMap2Both : (a -> b -> c) -> ( a, a ) -> ( b, b ) -> ( c, c )
 pointMap2Both fn =
     map2Both fn fn
+
+
+deltaPoint : ( number, number ) -> ( number, number ) -> ( number, number )
+deltaPoint ( a, b ) ( x, y ) =
+    ( x - a, y - b )

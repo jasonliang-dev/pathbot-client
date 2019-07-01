@@ -26,6 +26,16 @@ apiHost =
     "https://api.noopschallenge.com"
 
 
+radius : Float
+radius =
+    15
+
+
+gridUnit : Int
+gridUnit =
+    4
+
+
 
 ---- PATHBOT  ----
 
@@ -71,6 +81,8 @@ type alias Model =
     , position : ( Int, Int )
     , width : Int
     , height : Int
+    , cameraX : Float
+    , cameraY : Float
     }
 
 
@@ -82,6 +94,8 @@ initialModel =
     , position = ( -1, 0 )
     , width = 1
     , height = 1
+    , cameraX = 1
+    , cameraY = 1
     }
 
 
@@ -111,6 +125,7 @@ type Msg
     = GotPathbot (Result Http.Error Pathbot)
     | MovePlayer (Maybe CardinalPoint)
     | ResizeWindow Int Int
+    | FrameUpdate Float
     | NoOp
 
 
@@ -144,11 +159,21 @@ update msg model =
                                 direction
                                 model.position
 
+                        ( cameraX, cameraY ) =
+                            updateCamera direction
+                                ( model.cameraX, model.cameraY )
+
                         nextNodeExists =
                             Dict.member nextPosition model.maze
                     in
                     if nextNodeExists then
-                        ( { model | position = nextPosition }, Cmd.none )
+                        ( { model
+                            | position = nextPosition
+                            , cameraX = model.cameraX + cameraX
+                            , cameraY = model.cameraY + cameraY
+                          }
+                        , Cmd.none
+                        )
 
                     else
                         ( { model | moveDirection = direction, moving = True }
@@ -163,7 +188,35 @@ update msg model =
                     |> Maybe.withDefault (update NoOp model)
 
         ResizeWindow width height ->
-            ( { model | width = width, height = height }, Cmd.none )
+            ( { model
+                | width = width
+                , height = height
+                , cameraX = toFloat width / 2
+                , cameraY = toFloat height / 2
+              }
+            , Cmd.none
+            )
+
+        FrameUpdate deltaTime ->
+            let
+                midX =
+                    toFloat model.width / 2
+
+                midY =
+                    toFloat model.height / 2
+
+                camX =
+                    model.cameraX
+
+                camY =
+                    model.cameraY
+            in
+            ( { model
+                | cameraX = camX + (midX - camX) * 0.08
+                , cameraY = camY + (midY - camY) * 0.08
+              }
+            , Cmd.none
+            )
 
         NoOp ->
             ( model, Cmd.none )
@@ -196,6 +249,11 @@ updateMaze pathbot model =
 
 updateMazeInProgress : Pathbot -> Model -> Model
 updateMazeInProgress pathbot model =
+    let
+        ( cameraX, cameraY ) =
+            updateCamera model.moveDirection
+                ( model.cameraX, model.cameraY )
+    in
     { model
         | position =
             CardinalPoint.toRelativeCoordinate
@@ -210,7 +268,20 @@ updateMazeInProgress pathbot model =
                     |> Maze.createNode pathbot.locationPath
                 )
                 model.maze
+        , cameraX = model.cameraX + cameraX
+        , cameraY = model.cameraY + cameraY
     }
+
+
+updateCamera : CardinalPoint -> ( Float, Float ) -> ( Float, Float )
+updateCamera direction model =
+    let
+        ( x, y ) =
+            CardinalPoint.toCoordinate direction
+    in
+    ( radius * toFloat gridUnit * toFloat x
+    , radius * toFloat gridUnit * toFloat y
+    )
 
 
 
@@ -222,6 +293,7 @@ subscriptions model =
     Sub.batch
         [ Events.onKeyDown <| Decode.map MovePlayer decodeKey
         , Events.onResize ResizeWindow
+        , Events.onAnimationFrameDelta FrameUpdate
         ]
 
 
@@ -267,11 +339,7 @@ toCardinalPoint str =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ Canvas.toHtml ( model.width, model.height )
-            []
-            (renders model)
-        ]
+    div [] [ Canvas.toHtml ( model.width, model.height ) [] (renders model) ]
 
 
 clearCanvas : ( Float, Float ) -> Renderable
@@ -284,20 +352,17 @@ clearCanvas ( width, height ) =
 renders : Model -> List Renderable
 renders model =
     let
-        radius =
-            15
-
         red =
             Color.rgb255 236 67 66
-
-        dimensions =
-            ( toFloat model.width, toFloat model.height )
 
         ( offsetX, offsetY ) =
             model.position
 
+        cameraPos =
+            ( model.cameraX, model.cameraY )
+
         drawNode ( x, y ) node =
-            drawMazeNode radius dimensions ( x - offsetX, y - offsetY ) node
+            drawMazeNode cameraPos ( x - offsetX, y - offsetY ) node
     in
     List.concat
         [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
@@ -307,28 +372,28 @@ renders model =
         , [ Canvas.shapes
                 [ Canvas.fill red ]
                 [ Canvas.circle
-                    (pointOnCanvas radius dimensions ( 0, 0 ))
-                    (radius - 2)
+                    (pointOnCanvas cameraPos ( 0, 0 ))
+                    (radius + 2)
                 ]
           ]
         ]
 
 
-pointOnCanvas : Float -> ( Float, Float ) -> ( Int, Int ) -> ( Float, Float )
-pointOnCanvas radius ( width, height ) ( x, y ) =
-    ( radius * 4 * toFloat x + width / 2
-    , radius * 4 * toFloat y + height / 2
+pointOnCanvas : ( Float, Float ) -> ( Int, Int ) -> ( Float, Float )
+pointOnCanvas ( cameraX, cameraY ) ( x, y ) =
+    ( radius * toFloat gridUnit * toFloat x + cameraX
+    , radius * toFloat gridUnit * toFloat y + cameraY
     )
 
 
-drawMazeNode : Float -> ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
-drawMazeNode radius ( width, height ) ( x, y ) node =
+drawMazeNode : ( Float, Float ) -> ( Int, Int ) -> MazeNode -> List Renderable
+drawMazeNode ( cameraX, cameraY ) ( x, y ) node =
     let
         black =
             Color.rgb255 36 41 46
 
         getCanvasPoint =
-            pointOnCanvas radius ( width, height )
+            pointOnCanvas ( cameraX, cameraY )
 
         trimLine ( xx, yy ) =
             ( radius * toFloat (xx - x), radius * toFloat (yy - y) )
