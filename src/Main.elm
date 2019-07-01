@@ -119,6 +119,9 @@ update msg model =
     case msg of
         GotPathbot result ->
             let
+                _ =
+                    Debug.log "pathbot" (Debug.toString result)
+
                 updatedModel =
                     { model | moving = False }
             in
@@ -313,27 +316,41 @@ drawMazeNode radius ( width, height ) ( x, y ) node =
 
         getCanvasPoint =
             pointOnCanvas radius ( width, height )
+
+        trimLine ( xx, yy ) =
+            ( radius * toFloat (xx - x), radius * toFloat (yy - y) )
+
+        drawLine ( xx, yy ) =
+            Canvas.path
+                (Utils.pointMap2Both (+)
+                    (getCanvasPoint ( x, y ))
+                    (trimLine ( xx, yy ))
+                )
+                [ Canvas.lineTo
+                    (Utils.pointMap2Both (-)
+                        (getCanvasPoint ( xx, yy ))
+                        (trimLine ( xx, yy ))
+                    )
+                ]
     in
     [ Canvas.shapes
+        [ Canvas.fill fillColor
+        , Canvas.stroke black
+        , Canvas.lineWidth 4
+        ]
+        [ Canvas.circle
+            (getCanvasPoint ( x, y ))
+            (radius - 2)
+        ]
+    , Canvas.shapes
         [ Canvas.stroke black
         , Canvas.lineWidth 2
         ]
         (node
             |> Maze.toCardinalPoints
             |> List.map (Utils.flip CardinalPoint.toRelativeCoordinate ( x, y ))
-            |> List.map
-                (\( xx, yy ) ->
-                    Canvas.path
-                        (getCanvasPoint ( xx, yy ))
-                        [ Canvas.lineTo (getCanvasPoint ( x, y )) ]
-                )
+            |> List.map drawLine
         )
-    , Canvas.shapes
-        [ Canvas.fill fillColor ]
-        [ Canvas.circle
-            (getCanvasPoint ( x, y ))
-            radius
-        ]
     ]
 
 
