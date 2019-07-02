@@ -6,7 +6,7 @@ module Utils exposing
     , map2Both
     , pointMagnitude
     , pointMap
-    , pointMap2Both
+    , pointMap2
     , uncurry
     )
 
@@ -45,14 +45,14 @@ pointMap fn =
     Tuple.mapBoth fn fn
 
 
+pointMap2 : (a -> b -> c) -> ( a, a ) -> ( b, b ) -> ( c, c )
+pointMap2 fn =
+    map2Both fn fn
+
+
 map2Both : (a -> c -> x) -> (b -> d -> y) -> ( a, b ) -> ( c, d ) -> ( x, y )
 map2Both fnFirst fnSecond ( a, b ) ( c, d ) =
     Tuple.mapBoth (fnFirst a) (fnSecond b) ( c, d )
-
-
-pointMap2Both : (a -> b -> c) -> ( a, a ) -> ( b, b ) -> ( c, c )
-pointMap2Both fn =
-    map2Both fn fn
 
 
 pointMagnitude : ( Float, Float ) -> Float

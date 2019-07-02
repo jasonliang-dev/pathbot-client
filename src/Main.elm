@@ -148,46 +148,12 @@ update msg model =
             let
                 currentNode =
                     Dict.get model.position model.maze
-
-                doMove direction mazeNode =
-                    let
-                        nextPosition =
-                            CardinalPoint.toRelativeCoordinate
-                                direction
-                                model.position
-
-                        ( cameraX, cameraY ) =
-                            jumpCamera direction
-
-                        nextPathExists =
-                            Maze.toCardinalPoints mazeNode
-                                |> List.member direction
-
-                        nextNodeExists =
-                            Dict.member nextPosition model.maze
-                    in
-                    if not nextPathExists then
-                        ( model, Cmd.none )
-
-                    else if nextNodeExists then
-                        ( { model
-                            | position = nextPosition
-                            , cameraX = model.cameraX + cameraX
-                            , cameraY = model.cameraY + cameraY
-                          }
-                        , Cmd.none
-                        )
-
-                    else
-                        ( { model | moveDirection = direction, moving = True }
-                        , postMove mazeNode.locationPath direction
-                        )
             in
             if model.moving then
                 update NoOp model
 
             else
-                Maybe.map2 doMove movement currentNode
+                Maybe.map2 (doMove model) movement currentNode
                     |> Maybe.withDefault (update NoOp model)
 
         ResizeWindow width height ->
@@ -200,29 +166,56 @@ update msg model =
             , Cmd.none
             )
 
-        FrameUpdate deltaTime ->
+        FrameUpdate _ ->
             let
-                midX =
-                    toFloat model.width / 2
-
-                midY =
-                    toFloat model.height / 2
-
-                camX =
-                    model.cameraX
-
-                camY =
-                    model.cameraY
+                tween initial final =
+                    initial + (final - initial) * 0.05
             in
             ( { model
-                | cameraX = camX + (midX - camX) * deltaTime * 0.005
-                , cameraY = camY + (midY - camY) * deltaTime * 0.005
+                | cameraX = tween model.cameraX (toFloat model.width / 2)
+                , cameraY = tween model.cameraY (toFloat model.height / 2)
               }
             , Cmd.none
             )
 
         NoOp ->
             ( model, Cmd.none )
+
+
+doMove : Model -> CardinalPoint -> MazeNode -> ( Model, Cmd Msg )
+doMove model direction mazeNode =
+    let
+        nextPosition =
+            CardinalPoint.toRelativeCoordinate
+                direction
+                model.position
+
+        ( cameraX, cameraY ) =
+            jumpCamera direction
+
+        nextPathExists =
+            Maze.toCardinalPoints mazeNode
+                |> List.member direction
+
+        nextNodeExists =
+            Dict.member nextPosition model.maze
+    in
+    if not nextPathExists then
+        ( model, Cmd.none )
+
+    else if nextNodeExists then
+        ( { model
+            | position = nextPosition
+            , cameraX = model.cameraX + cameraX
+            , cameraY = model.cameraY + cameraY
+          }
+        , Cmd.none
+        )
+
+    else
+        ( { model | moveDirection = direction, moving = True }
+        , postMove mazeNode.locationPath direction
+        )
 
 
 postMove : String -> CardinalPoint -> Cmd Msg
@@ -365,10 +358,7 @@ renders model =
             ( model.cameraX, model.cameraY )
 
         drawNode ( x, y ) node =
-            drawMazeNode ( toFloat model.width, toFloat model.height )
-                cameraPos
-                ( x - offsetX, y - offsetY )
-                node
+            drawMazeNode model ( x - offsetX, y - offsetY ) node
     in
     List.concat
         [ [ clearCanvas ( toFloat model.width, toFloat model.height ) ]
@@ -392,17 +382,12 @@ pointOnCanvas ( cameraX, cameraY ) ( x, y ) =
     )
 
 
-drawMazeNode :
-    ( Float, Float )
-    -> ( Float, Float )
-    -> ( Int, Int )
-    -> MazeNode
-    -> List Renderable
-drawMazeNode ( width, height ) ( cameraX, cameraY ) ( x, y ) node =
+drawMazeNode : Model -> ( Int, Int ) -> MazeNode -> List Renderable
+drawMazeNode model ( x, y ) node =
     let
         delta =
-            Utils.pointMap2Both (-)
-                ( width / 2, height / 2 )
+            Utils.pointMap2 (-)
+                ( toFloat model.width / 2, toFloat model.height / 2 )
                 (getCanvasPoint ( x, y ))
 
         alpha =
@@ -412,19 +397,19 @@ drawMazeNode ( width, height ) ( cameraX, cameraY ) ( x, y ) node =
             Color.rgba 0.14 0.16 0.18 alpha
 
         getCanvasPoint =
-            pointOnCanvas ( cameraX, cameraY )
+            pointOnCanvas ( model.cameraX, model.cameraY )
 
         trimLine ( xx, yy ) =
             ( radius * toFloat (xx - x), radius * toFloat (yy - y) )
 
         drawLine ( xx, yy ) =
             Canvas.path
-                (Utils.pointMap2Both (+)
+                (Utils.pointMap2 (+)
                     (getCanvasPoint ( x, y ))
                     (trimLine ( xx, yy ))
                 )
                 [ Canvas.lineTo
-                    (Utils.pointMap2Both (-)
+                    (Utils.pointMap2 (-)
                         (getCanvasPoint ( xx, yy ))
                         (trimLine ( xx, yy ))
                     )
