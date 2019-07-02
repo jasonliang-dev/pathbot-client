@@ -23,7 +23,8 @@ import Utils
 
 apiHost : String
 apiHost =
-    "https://api.noopschallenge.com"
+    -- "https://api.noopschallenge.com"
+    "http://localhost:3333"
 
 
 radius : Float
@@ -64,7 +65,7 @@ decodePathbot =
         |> required "status" Decode.string
         |> optional "message" Decode.string ""
         |> optional "exits" (Decode.list Decode.string) []
-        |> required "description" Decode.string
+        |> optional "description" Decode.string ""
         |> optional "mazeExitDirection" Decode.string ""
         |> optional "mazeExitDistance" Decode.int -1
         |> optional "locationPath" Decode.string ""
@@ -237,7 +238,7 @@ updateMaze pathbot model =
             updateMazeInProgress pathbot model
 
         "finished" ->
-            model
+            finishMaze model
 
         _ ->
             model
@@ -245,6 +246,35 @@ updateMaze pathbot model =
 
 updateMazeInProgress : Pathbot -> Model -> Model
 updateMazeInProgress pathbot model =
+    let
+        updatedModel =
+            applyPlayerMove model
+
+        node =
+            pathbot.exits
+                |> List.filterMap CardinalPoint.fromString
+                |> Maze.createNode pathbot.locationPath
+    in
+    { updatedModel
+        | maze =
+            Maze.insert model node
+    }
+
+
+finishMaze : Model -> Model
+finishMaze model =
+    let
+        updatedModel =
+            applyPlayerMove model
+    in
+    { updatedModel
+        | maze =
+            Maze.insert model Maze.singletonNode
+    }
+
+
+applyPlayerMove : Model -> Model
+applyPlayerMove model =
     let
         ( cameraX, cameraY ) =
             jumpCamera model.moveDirection
@@ -254,15 +284,6 @@ updateMazeInProgress pathbot model =
             CardinalPoint.toRelativeCoordinate
                 model.moveDirection
                 model.position
-        , maze =
-            Maze.insert
-                model.moveDirection
-                model.position
-                (pathbot.exits
-                    |> List.filterMap CardinalPoint.fromString
-                    |> Maze.createNode pathbot.locationPath
-                )
-                model.maze
         , cameraX = model.cameraX + cameraX
         , cameraY = model.cameraY + cameraY
     }

@@ -1,4 +1,11 @@
-module Types.Maze exposing (Maze, MazeNode, createNode, insert, toCardinalPoints)
+module Types.Maze exposing
+    ( Maze
+    , MazeNode
+    , createNode
+    , insert
+    , singletonNode
+    , toCardinalPoints
+    )
 
 import Dict exposing (Dict)
 import Types.CardinalPoint as CardinalPoint exposing (CardinalPoint(..))
@@ -15,6 +22,24 @@ type alias MazeNode =
 
 type alias Maze =
     Dict ( Int, Int ) MazeNode
+
+
+type alias PlayableMaze a =
+    { a
+        | moveDirection : CardinalPoint
+        , position : ( Int, Int )
+        , maze : Maze
+    }
+
+
+singletonNode : MazeNode
+singletonNode =
+    { locationPath = ""
+    , north = False
+    , south = False
+    , east = False
+    , west = False
+    }
 
 
 createNode : String -> List CardinalPoint -> MazeNode
@@ -36,16 +61,10 @@ createNode locationPath directions =
 
                 _ ->
                     node
-
-        emptyNode =
-            { locationPath = locationPath
-            , north = False
-            , south = False
-            , east = False
-            , west = False
-            }
     in
-    List.foldl addDirection emptyNode directions
+    List.foldl addDirection
+        { singletonNode | locationPath = locationPath }
+        directions
 
 
 toCardinalPoints : MazeNode -> List CardinalPoint
@@ -66,6 +85,7 @@ toCardinalPoints node =
         ]
 
 
-insert : CardinalPoint -> ( Int, Int ) -> MazeNode -> Maze -> Maze
-insert direction =
-    Dict.insert << CardinalPoint.toRelativeCoordinate direction
+insert : PlayableMaze a -> MazeNode -> Maze
+insert model node =
+    CardinalPoint.toRelativeCoordinate model.moveDirection model.position
+        |> (\pos -> Dict.insert pos node model.maze)
