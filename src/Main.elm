@@ -27,11 +27,6 @@ apiHost =
     "http://localhost:3333"
 
 
-radius : Float
-radius =
-    15
-
-
 gridUnit : Int
 gridUnit =
     4
@@ -78,12 +73,14 @@ decodePathbot =
 type alias Model =
     { maze : Maze
     , moveDirection : CardinalPoint
-    , moving : Bool
+    , moving : Bool -- when True, ignore keyboard
     , position : ( Int, Int )
-    , width : Int
-    , height : Int
+    , width : Int -- window width
+    , height : Int -- window height
     , cameraX : Float
     , cameraY : Float
+    , radius : Float -- can be though of as zoom size
+    , finished : Bool
     }
 
 
@@ -97,6 +94,8 @@ initialModel =
     , height = 1
     , cameraX = 1
     , cameraY = 1
+    , radius = 14
+    , finished = False
     }
 
 
@@ -171,10 +170,18 @@ update msg model =
             let
                 tween initial final =
                     initial + (final - initial) * 0.05
+
+                radiusUpdateFactor =
+                    if model.finished then
+                        0.9
+
+                    else
+                        1
             in
             ( { model
                 | cameraX = tween model.cameraX (toFloat model.width / 2)
                 , cameraY = tween model.cameraY (toFloat model.height / 2)
+                , radius = max 1 (model.radius * radiusUpdateFactor)
               }
             , Cmd.none
             )
@@ -192,7 +199,7 @@ doMove model direction mazeNode =
                 model.position
 
         ( cameraX, cameraY ) =
-            jumpCamera direction
+            jumpCamera model.radius direction
 
         nextPathExists =
             Maze.toCardinalPoints mazeNode
@@ -270,6 +277,7 @@ finishMaze model =
     { updatedModel
         | maze =
             Maze.insert model Maze.singletonNode
+        , finished = True
     }
 
 
@@ -277,7 +285,7 @@ applyPlayerMove : Model -> Model
 applyPlayerMove model =
     let
         ( cameraX, cameraY ) =
-            jumpCamera model.moveDirection
+            jumpCamera model.radius model.moveDirection
     in
     { model
         | position =
@@ -289,8 +297,8 @@ applyPlayerMove model =
     }
 
 
-jumpCamera : CardinalPoint -> ( Float, Float )
-jumpCamera direction =
+jumpCamera : Float -> CardinalPoint -> ( Float, Float )
+jumpCamera radius direction =
     let
         ( x, y ) =
             CardinalPoint.toCoordinate direction
@@ -372,6 +380,9 @@ renders model =
         red =
             Color.rgb255 236 67 66
 
+        green =
+            Color.rgb255 82 164 81
+
         ( offsetX, offsetY ) =
             model.position
 
@@ -387,17 +398,23 @@ renders model =
             |> List.map (Utils.uncurry drawNode)
             |> List.concat
         , [ Canvas.shapes
-                [ Canvas.fill red ]
+                [ Canvas.fill <|
+                    if model.finished then
+                        green
+
+                    else
+                        red
+                ]
                 [ Canvas.circle
-                    (pointOnCanvas cameraPos ( 0, 0 ))
-                    (radius + 2)
+                    (pointOnCanvas model.radius cameraPos ( 0, 0 ))
+                    (model.radius + 2)
                 ]
           ]
         ]
 
 
-pointOnCanvas : ( Float, Float ) -> ( Int, Int ) -> ( Float, Float )
-pointOnCanvas ( cameraX, cameraY ) ( x, y ) =
+pointOnCanvas : Float -> ( Float, Float ) -> ( Int, Int ) -> ( Float, Float )
+pointOnCanvas radius ( cameraX, cameraY ) ( x, y ) =
     ( radius * toFloat gridUnit * toFloat x + cameraX
     , radius * toFloat gridUnit * toFloat y + cameraY
     )
@@ -418,10 +435,12 @@ drawMazeNode model ( x, y ) node =
             Color.rgba 0.14 0.16 0.18 alpha
 
         getCanvasPoint =
-            pointOnCanvas ( model.cameraX, model.cameraY )
+            pointOnCanvas model.radius ( model.cameraX, model.cameraY )
 
         trimLine ( xx, yy ) =
-            ( radius * toFloat (xx - x), radius * toFloat (yy - y) )
+            ( model.radius * toFloat (xx - x)
+            , model.radius * toFloat (yy - y)
+            )
 
         drawLine ( xx, yy ) =
             Canvas.path
@@ -445,7 +464,7 @@ drawMazeNode model ( x, y ) node =
         drawUnvisted direction =
             Canvas.circle
                 (getCanvasPoint <| nextPoint direction)
-                (radius - 1)
+                (model.radius - 1)
     in
     if alpha == 0 then
         []
@@ -453,7 +472,7 @@ drawMazeNode model ( x, y ) node =
     else
         [ Canvas.shapes
             [ Canvas.fill black ]
-            [ Canvas.circle (getCanvasPoint ( x, y )) (radius - 1) ]
+            [ Canvas.circle (getCanvasPoint ( x, y )) (model.radius - 1) ]
         , Canvas.shapes
             [ Canvas.stroke black
             , Canvas.lineWidth 2
