@@ -23,8 +23,7 @@ import Utils
 
 apiHost : String
 apiHost =
-    -- "https://api.noopschallenge.com"
-    "http://localhost:3333"
+    "https://api.noopschallenge.com"
 
 
 gridUnit : Int
@@ -70,8 +69,15 @@ decodePathbot =
 ---- MODEL ----
 
 
+type MazeFetchStatus
+    = Failed
+    | Loading
+    | Loaded
+
+
 type alias Model =
     { maze : Maze
+    , fetchStatus : MazeFetchStatus
     , moveDirection : CardinalPoint
     , moving : Bool -- when True, ignore keyboard
     , position : ( Int, Int )
@@ -80,6 +86,7 @@ type alias Model =
     , cameraX : Float
     , cameraY : Float
     , radius : Float -- can be though of as zoom size
+    , defaultRadius : Float
     , finished : Bool
     }
 
@@ -87,14 +94,16 @@ type alias Model =
 initialModel : Model
 initialModel =
     { maze = Dict.empty
-    , moveDirection = East
+    , fetchStatus = Loading
+    , moveDirection = North
     , moving = True
-    , position = ( -1, 0 )
+    , position = ( 0, -1 )
     , width = 1
     , height = 1
     , cameraX = 1
     , cameraY = 1
-    , radius = 14
+    , radius = 80
+    , defaultRadius = 14
     , finished = False
     }
 
@@ -134,12 +143,19 @@ update msg model =
     case msg of
         GotPathbot result ->
             let
+                baseModel =
+                    if model.finished then
+                        initialModel
+
+                    else
+                        model
+
                 updatedModel =
-                    { model | moving = False }
+                    { baseModel | moving = False }
             in
             case result of
                 Err _ ->
-                    ( updatedModel, Cmd.none )
+                    ( { updatedModel | fetchStatus = Failed }, Cmd.none )
 
                 Ok pathbot ->
                     ( updateMaze pathbot updatedModel, Cmd.none )
@@ -168,23 +184,40 @@ update msg model =
 
         FrameUpdate _ ->
             let
-                tween initial final =
-                    initial + (final - initial) * 0.05
+                tween initial final speed =
+                    initial + (final - initial) * speed
 
-                radiusUpdateFactor =
-                    if model.finished then
-                        0.9
-
-                    else
-                        1
+                updatedCameraModel =
+                    { model
+                        | cameraX = tween model.cameraX (toFloat model.width / 2) 0.05
+                        , cameraY = tween model.cameraY (toFloat model.height / 2) 0.05
+                    }
             in
-            ( { model
-                | cameraX = tween model.cameraX (toFloat model.width / 2)
-                , cameraY = tween model.cameraY (toFloat model.height / 2)
-                , radius = max 1 (model.radius * radiusUpdateFactor)
-              }
-            , Cmd.none
-            )
+            if model.finished then
+                let
+                    finishUpModel =
+                        { updatedCameraModel | radius = tween model.radius 1 0.025 }
+                in
+                case model.fetchStatus of
+                    Failed ->
+                        init
+
+                    Loading ->
+                        ( finishUpModel, Cmd.none )
+
+                    Loaded ->
+                        if model.radius < 1.5 then
+                            init
+
+                        else
+                            ( finishUpModel, Cmd.none )
+
+            else
+                ( { updatedCameraModel
+                    | radius = tween model.radius model.defaultRadius 0.08
+                  }
+                , Cmd.none
+                )
 
         NoOp ->
             ( model, Cmd.none )
@@ -221,7 +254,11 @@ doMove model direction mazeNode =
         )
 
     else
-        ( { model | moveDirection = direction, moving = True }
+        ( { model
+            | moveDirection = direction
+            , moving = True
+            , fetchStatus = Loading
+          }
         , postMove mazeNode.locationPath direction
         )
 
@@ -265,6 +302,7 @@ updateMazeInProgress pathbot model =
     { updatedModel
         | maze =
             Maze.insert model node
+        , fetchStatus = Loaded
     }
 
 
@@ -278,6 +316,7 @@ finishMaze model =
         | maze =
             Maze.insert model Maze.singletonNode
         , finished = True
+        , fetchStatus = Loaded
     }
 
 
@@ -377,11 +416,18 @@ clearCanvas ( width, height ) =
 renders : Model -> List Renderable
 renders model =
     let
+        alpha =
+            if model.finished then
+                max 0 (model.radius / model.defaultRadius)
+
+            else
+                model.defaultRadius / model.radius
+
         red =
-            Color.rgb255 236 67 66
+            Color.rgba 0.92 0.26 0.26 alpha
 
         green =
-            Color.rgb255 82 164 81
+            Color.rgba 0.32 0.64 0.32 alpha
 
         ( offsetX, offsetY ) =
             model.position
@@ -428,8 +474,16 @@ drawMazeNode model ( x, y ) node =
                 ( toFloat model.width / 2, toFloat model.height / 2 )
                 (getCanvasPoint ( x, y ))
 
+        fogAlpha =
+            2 - Utils.pointMagnitude delta * 0.008
+
         alpha =
-            max 0 (2 - Utils.pointMagnitude delta * 0.008)
+            if model.finished then
+                min (model.radius / model.defaultRadius)
+                    fogAlpha
+
+            else
+                clamp 0 (model.defaultRadius / model.radius) fogAlpha
 
         black =
             Color.rgba 0.14 0.16 0.18 alpha
