@@ -1,0 +1,11 @@
+{
+  "main.css": "/pathbot-client/static/css/main.d8b01536.chunk.css",
+  "main.js": "/pathbot-client/static/js/main.a43c54e0.chunk.js",
+  "main.css.map": "/pathbot-client/static/css/main.d8b01536.chunk.css.map",
+  "main.js.map": "/pathbot-client/static/js/main.a43c54e0.chunk.js.map",
+  "runtime~main.js": "/pathbot-client/static/js/runtime~main.42e89958.js",
+  "runtime~main.js.map": "/pathbot-client/static/js/runtime~main.42e89958.js.map",
+  "vendors~main.js": "/pathbot-client/static/js/vendors~main.3ca17483.chunk.js",
+  "vendors~main.js.map": "/pathbot-client/static/js/vendors~main.3ca17483.chunk.js.map",
+  "index.html": "/pathbot-client/index.html"
+}
